@@ -158,6 +158,7 @@ select{cursor:pointer}
   <div class="nav-tab active" onclick="goTab('form')">📝 نموذج الاستلام</div>
   <div class="nav-tab" onclick="goTab('log')">📥 سجل الاستلام</div>
   <div class="nav-tab" onclick="goTab('inv')">📦 المخزون</div>
+  <div class="nav-tab" onclick="goTab('devices')">⚙️ إدارة الأجهزة</div>
 </nav>
 
 <!-- ═══════════ FORM PAGE ═══════════ -->
@@ -307,6 +308,94 @@ select{cursor:pointer}
         </thead>
         <tbody id="inv-tbody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════ DEVICES MANAGEMENT PAGE ═══════════ -->
+<div class="page" id="page-devices">
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">⚙️ إدارة الأجهزة</div>
+    <div class="card-body">
+      <div class="btn-row" style="justify-content:flex-start;margin-bottom:16px">
+        <button class="btn btn-save" onclick="openDeviceModal()">➕ إضافة جهاز جديد</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="inv-table" id="devices-mgmt-table">
+          <thead>
+            <tr>
+              <th>رقم الجهاز</th><th>اسم الجهاز</th><th>النوع</th>
+              <th>الرقم التسلسلي</th><th>المواصفات</th><th>الموقع</th><th>الحالة</th><th class="no-print">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="devices-mgmt-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ DEVICE MODAL ═══════════ -->
+<div class="modal-bg" id="device-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="device-modal-title">➕ إضافة جهاز جديد</h3>
+      <button class="modal-close" onclick="closeDeviceModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <div class="field">
+          <label>رقم الجهاز <span class="req">*</span></label>
+          <input id="dm-id" placeholder="مثال: JHZ-011">
+        </div>
+        <div class="field">
+          <label>اسم الجهاز <span class="req">*</span></label>
+          <input id="dm-name" placeholder="مثال: آيفون 15 برو">
+        </div>
+        <div class="field">
+          <label>النوع</label>
+          <div style="display:flex;gap:6px">
+            <select id="dm-type" onchange="onTypeSelect()" style="flex:1">
+            </select>
+            <button type="button" onclick="addNewType()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:0 12px;cursor:pointer;font-size:18px;font-weight:bold" title="إضافة نوع جديد">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>الماركة / الموديل</label>
+          <input id="dm-brand" placeholder="مثال: آبل / iPhone 15 Pro">
+        </div>
+        <div class="field">
+          <label>الرقم التسلسلي</label>
+          <input id="dm-serial" placeholder="مثال: SN123456">
+        </div>
+        <div class="field">
+          <label>المواصفات</label>
+          <input id="dm-specs" placeholder="مثال: 256 GB">
+        </div>
+        <div class="field">
+          <label>الموقع</label>
+          <select id="dm-location">
+            <option>المتجر أ</option>
+            <option>المتجر ب</option>
+            <option>المستودع</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>الحالة</label>
+          <select id="dm-status">
+            <option>متاح</option>
+            <option>غير متاح</option>
+            <option>محجوز</option>
+            <option>مباع</option>
+            <option>تم التحويل</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDeviceModal()">إلغاء</button>
+      <button class="btn btn-save" onclick="saveDevice()">💾 حفظ الجهاز</button>
     </div>
   </div>
 </div>
@@ -540,6 +629,7 @@ function loadFromStorage() {
 // ── Init ───────────────────────────────────────────────────────
 function init() {
   loadFromStorage();
+  loadDeviceTypes();
   const now = new Date();
   document.getElementById('f-date').textContent = now.toLocaleDateString('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('f-rtime').value = now.toTimeString().slice(0,5);
@@ -568,11 +658,12 @@ function init() {
 
 // ── Tab navigation ─────────────────────────────────────────────
 function goTab(t) {
-  document.querySelectorAll('.nav-tab').forEach((b,i)=>b.classList.toggle('active',['form','log','inv'][i]===t));
+  document.querySelectorAll('.nav-tab').forEach((b,i)=>b.classList.toggle('active',['form','log','inv','devices'][i]===t));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+t).classList.add('active');
   if(t==='log') renderLog();
   if(t==='inv') renderInventory();
+  if(t==='devices') renderDevicesMgmt();
 }
 
 // ── Engineer auto-fill ─────────────────────────────────────────
@@ -1071,6 +1162,176 @@ function toast(msg) {
 // Close modals on bg click
 document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('edit-modal'))closeEdit();});
 document.getElementById('print-modal').addEventListener('click',e=>{if(e.target===document.getElementById('print-modal'))closePrint();});
+
+
+
+// ── Device Types Management ────────────────────────────────────
+const LS_TYPES = 'sf_device_types';
+const DEFAULT_TYPES = ['هاتف','تابلت','لابتوب','إكسسوار','أخرى'];
+let DEVICE_TYPES = [];
+
+function loadDeviceTypes() {
+  try {
+    const saved = localStorage.getItem(LS_TYPES);
+    DEVICE_TYPES = saved ? JSON.parse(saved) : [...DEFAULT_TYPES];
+  } catch(e) { DEVICE_TYPES = [...DEFAULT_TYPES]; }
+}
+
+function saveDeviceTypes() {
+  localStorage.setItem(LS_TYPES, JSON.stringify(DEVICE_TYPES));
+}
+
+function renderTypeSelect(selectedValue) {
+  const sel = document.getElementById('dm-type');
+  if(!sel) return;
+  sel.innerHTML = DEVICE_TYPES.map(t =>
+    `<option value="${t}" ${t===selectedValue?'selected':''}>${t}</option>`
+  ).join('') + '<option value="__manage__">⚙️ إدارة الأنواع...</option>';
+}
+
+function onTypeSelect() {
+  const sel = document.getElementById('dm-type');
+  if(sel.value === '__manage__') {
+    sel.value = DEVICE_TYPES[0];
+    openTypeManager();
+  }
+}
+
+function addNewType() {
+  const name = prompt('أدخل اسم النوع الجديد:');
+  if(!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if(DEVICE_TYPES.includes(trimmed)){toast('النوع موجود مسبقاً');return;}
+  DEVICE_TYPES.push(trimmed);
+  saveDeviceTypes();
+  renderTypeSelect(trimmed);
+  toast('✅ تم إضافة النوع: ' + trimmed);
+}
+
+function openTypeManager() {
+  const list = DEVICE_TYPES.map((t,i) =>
+    `${i+1}. ${t} ${DEFAULT_TYPES.includes(t)?'(افتراضي)':''}`
+  ).join('\n');
+  const action = prompt('الأنواع الحالية:\n' + list + '\n\nأدخل رقم النوع لحذفه، أو اضغط إلغاء:');
+  if(!action || !action.trim()) return;
+  const idx = parseInt(action.trim()) - 1;
+  if(isNaN(idx) || idx < 0 || idx >= DEVICE_TYPES.length){toast('رقم غير صحيح');return;}
+  if(DEFAULT_TYPES.includes(DEVICE_TYPES[idx])){toast('لا يمكن حذف الأنواع الافتراضية');return;}
+  const removed = DEVICE_TYPES.splice(idx,1)[0];
+  saveDeviceTypes();
+  renderTypeSelect(DEVICE_TYPES[0]);
+  toast('🗑 تم حذف النوع: ' + removed);
+}
+
+// ── Device Management ──────────────────────────────────────────
+let deviceEditIdx = null;
+
+function renderDevicesMgmt() {
+  const statColors = {'متاح':'b-green','غير متاح':'b-red','محجوز':'b-amber','مباع':'b-red','تم التحويل':'b-gray'};
+  const tbody = document.getElementById('devices-mgmt-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = INVENTORY.map((d,idx) => `<tr>
+    <td style="font-weight:700;color:var(--dark)">${d.id}</td>
+    <td>${d.name}</td>
+    <td>${d.type}</td>
+    <td style="color:var(--muted);font-size:12px">${d.serial}</td>
+    <td style="color:var(--muted);font-size:12px">${d.specs||'—'}</td>
+    <td>${d.location}</td>
+    <td><span class="badge ${statColors[d.status]||'b-gray'}">${d.status}</span></td>
+    <td class="no-print">
+      <div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn-edit" onclick="openDeviceModal(${idx})">✏️ تعديل</button>
+        <button class="btn-del" onclick="deleteDevice(${idx})">🗑 حذف</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+function openDeviceModal(idx) {
+  deviceEditIdx = (idx !== undefined) ? idx : null;
+  const title = document.getElementById('device-modal-title');
+  if(deviceEditIdx !== null) {
+    const d = INVENTORY[deviceEditIdx];
+    title.textContent = 'تعديل الجهاز — ' + d.id;
+    document.getElementById('dm-id').value = d.id;
+    document.getElementById('dm-id').readOnly = true;
+    document.getElementById('dm-name').value = d.name;
+    renderTypeSelect(d.type);
+    document.getElementById('dm-brand').value = d.brand||'';
+    document.getElementById('dm-serial').value = d.serial;
+    document.getElementById('dm-specs').value = d.specs||'';
+    document.getElementById('dm-location').value = d.location;
+    document.getElementById('dm-status').value = d.status;
+  } else {
+    title.textContent = 'إضافة جهاز جديد';
+    document.getElementById('dm-id').value = '';
+    document.getElementById('dm-id').readOnly = false;
+    document.getElementById('dm-name').value = '';
+    renderTypeSelect('هاتف');
+    document.getElementById('dm-brand').value = '';
+    document.getElementById('dm-serial').value = '';
+    document.getElementById('dm-specs').value = '';
+    document.getElementById('dm-location').value = 'المتجر أ';
+    document.getElementById('dm-status').value = 'متاح';
+  }
+  document.getElementById('device-modal').classList.add('open');
+}
+
+function closeDeviceModal() {
+  document.getElementById('device-modal').classList.remove('open');
+  deviceEditIdx = null;
+}
+
+function saveDevice() {
+  const id = document.getElementById('dm-id').value.trim();
+  const name = document.getElementById('dm-name').value.trim();
+  if(!id){toast('رقم الجهاز مطلوب');return;}
+  if(!name){toast('اسم الجهاز مطلوب');return;}
+
+  const newDevice = {
+    id,
+    name,
+    type: document.getElementById('dm-type').value,
+    brand: document.getElementById('dm-brand').value.trim(),
+    serial: document.getElementById('dm-serial').value.trim(),
+    specs: document.getElementById('dm-specs').value.trim(),
+    location: document.getElementById('dm-location').value,
+    status: document.getElementById('dm-status').value,
+    holder: 'مدير المخزن (صالح)'
+  };
+
+  if(deviceEditIdx !== null) {
+    newDevice.holder = INVENTORY[deviceEditIdx].holder;
+    INVENTORY[deviceEditIdx] = newDevice;
+    toast('تم تعديل الجهاز ' + id);
+  } else {
+    if(INVENTORY.find(d=>d.id===id)){toast('رقم الجهاز موجود مسبقاً');return;}
+    INVENTORY.push(newDevice);
+    toast('تم إضافة الجهاز ' + id);
+  }
+
+  saveToStorage();
+  pushToCloud(null, null);
+  closeDeviceModal();
+  renderDevicesMgmt();
+  renderInventory();
+}
+
+function deleteDevice(idx) {
+  const d = INVENTORY[idx];
+  if(d.status === 'غير متاح'){toast('لا يمكن حذف جهاز عند مستخدم');return;}
+  if(!confirm('هل أنت متأكد من حذف الجهاز ' + d.id + '?')) return;
+  INVENTORY.splice(idx,1);
+  saveToStorage();
+  pushToCloud(null, null);
+  toast('تم حذف الجهاز ' + d.id);
+  renderDevicesMgmt();
+  renderInventory();
+}
+
+document.addEventListener('click', function(e){
+  if(e.target===document.getElementById('device-modal')) closeDeviceModal();
+});
 
 init();
 </script>
