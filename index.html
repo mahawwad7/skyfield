@@ -159,6 +159,7 @@ select{cursor:pointer}
   <div class="nav-tab" onclick="goTab('log')">📥 سجل الاستلام</div>
   <div class="nav-tab" onclick="goTab('inv')">📦 المخزون</div>
   <div class="nav-tab" onclick="goTab('devices')">⚙️ إدارة الأجهزة</div>
+  <div class="nav-tab" onclick="goTab('settings')">🔧 الإعدادات</div>
 </nav>
 
 <!-- ═══════════ FORM PAGE ═══════════ -->
@@ -201,10 +202,7 @@ select{cursor:pointer}
         </div>
         <div class="field">
           <label>موقع العمل <span class="req">*</span></label>
-          <select id="f-loc">
-            <option>المتجر أ</option><option>المتجر ب</option>
-            <option>المستودع</option><option>الموقع الميداني</option><option>أخرى</option>
-          </select>
+          <select id="f-loc"></select>
         </div>
         <div class="field">
           <label>الحالة</label>
@@ -213,7 +211,7 @@ select{cursor:pointer}
             <option value="تسليم">تسليم</option>
           </select>
         </div>
-        <div class="field">
+        <div class="field" id="f-rtime-wrap">
           <label>وقت الاستلام</label>
           <input type="time" id="f-rtime">
         </div>
@@ -375,11 +373,7 @@ select{cursor:pointer}
         </div>
         <div class="field">
           <label>الموقع</label>
-          <select id="dm-location">
-            <option>المتجر أ</option>
-            <option>المتجر ب</option>
-            <option>المستودع</option>
-          </select>
+          <select id="dm-location"></select>
         </div>
         <div class="field">
           <label>الحالة</label>
@@ -396,6 +390,83 @@ select{cursor:pointer}
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeDeviceModal()">إلغاء</button>
       <button class="btn btn-save" onclick="saveDevice()">💾 حفظ الجهاز</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════ SETTINGS PAGE ═══════════ -->
+<div class="page" id="page-settings">
+
+  <!-- Engineers Management -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-header">👷 إدارة المستلمين</div>
+    <div class="card-body">
+      <div class="btn-row" style="justify-content:flex-start;margin-bottom:16px">
+        <button class="btn btn-save" onclick="openEngModal()">➕ إضافة مستلم</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="inv-table" id="eng-table">
+          <thead>
+            <tr>
+              <th>الاسم</th><th>الرقم الوظيفي</th><th>الجنسية</th>
+              <th>رقم الإقامة</th><th>التليفون</th><th class="no-print">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="eng-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Locations Management -->
+  <div class="card">
+    <div class="card-header">📍 إدارة مواقع العمل</div>
+    <div class="card-body">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+        <input id="new-location-input" placeholder="اسم الموقع الجديد..." style="max-width:280px">
+        <button class="btn btn-save" onclick="addLocation()">➕ إضافة موقع</button>
+      </div>
+      <div id="locations-list" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════ ENGINEER MODAL ═══════════ -->
+<div class="modal-bg" id="eng-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="eng-modal-title">➕ إضافة مستلم</h3>
+      <button class="modal-close" onclick="closeEngModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="fg">
+        <div class="field full">
+          <label>الاسم الكامل <span class="req">*</span></label>
+          <input id="em-name" placeholder="الاسم الكامل">
+        </div>
+        <div class="field">
+          <label>الرقم الوظيفي</label>
+          <input id="em-empid" placeholder="مثال: 260311">
+        </div>
+        <div class="field">
+          <label>الجنسية</label>
+          <input id="em-nat" placeholder="مثال: سعودي">
+        </div>
+        <div class="field">
+          <label>رقم الإقامة / الهوية</label>
+          <input id="em-iqama" placeholder="رقم الإقامة">
+        </div>
+        <div class="field">
+          <label>رقم التليفون</label>
+          <input id="em-phone" placeholder="05xxxxxxxx">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeEngModal()">إلغاء</button>
+      <button class="btn btn-save" onclick="saveEng()">💾 حفظ</button>
     </div>
   </div>
 </div>
@@ -430,8 +501,7 @@ select{cursor:pointer}
         <div class="field">
           <label>موقع العمل</label>
           <select id="e-loc">
-            <option>المتجر أ</option><option>المتجر ب</option>
-            <option>المستودع</option><option>الموقع الميداني</option><option>أخرى</option>
+
           </select>
         </div>
         <div class="field">
@@ -578,7 +648,7 @@ function openApiSettings() {
 }
 
 // ── Data ──────────────────────────────────────────────────────
-const ENGINEERS = [
+let ENGINEERS = [
   {name:"محمود عبدالسميع سليمان عواد",nat:"مصري",iqama:"2543037325",empid:"260311",phone:""},
   {name:"مجد جمال محمد حسين",nat:"مصري",iqama:"2559460999",empid:"260401",phone:""},
   {name:"عبدالله محمد صالح ادم",nat:"سوداني",iqama:"2600459933",empid:"260402",phone:""},
@@ -628,22 +698,18 @@ function loadFromStorage() {
 
 // ── Init ───────────────────────────────────────────────────────
 function init() {
+  loadEngineers();
+  loadLocations();
   loadFromStorage();
   loadDeviceTypes();
   const now = new Date();
   document.getElementById('f-date').textContent = now.toLocaleDateString('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   document.getElementById('f-rtime').value = now.toTimeString().slice(0,5);
+  updateTimeFieldsByStatus();
 
-  // Populate engineer dropdowns
-  ['f-eng','e-eng'].forEach(id => {
-    const sel = document.getElementById(id);
-    ENGINEERS.forEach(e => {
-      const opt = document.createElement('option');
-      opt.value = e.name;
-      opt.textContent = e.name;
-      sel.appendChild(opt);
-    });
-  });
+  // Populate engineer dropdowns & location selects
+  refreshEngDropdowns();
+  refreshLocationSelects();
 
   addDeviceRow();
   addDeviceRow();
@@ -658,12 +724,13 @@ function init() {
 
 // ── Tab navigation ─────────────────────────────────────────────
 function goTab(t) {
-  document.querySelectorAll('.nav-tab').forEach((b,i)=>b.classList.toggle('active',['form','log','inv','devices'][i]===t));
+  document.querySelectorAll('.nav-tab').forEach((b,i)=>b.classList.toggle('active',['form','log','inv','devices','settings'][i]===t));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+t).classList.add('active');
   if(t==='log') renderLog();
   if(t==='inv') renderInventory();
   if(t==='devices') renderDevicesMgmt();
+  if(t==='settings') renderSettings();
 }
 
 // ── Engineer auto-fill ─────────────────────────────────────────
@@ -675,15 +742,32 @@ function fillEng() {
   document.getElementById('f-phone').value = eng.phone||'';
   const isManager = name === 'مدير المخزن (صالح)';
   const statusSel = document.getElementById('f-status');
-  // مدير المخزن = تسليم (يُسلّم الجهاز للمهندس) | غيره = استلام
   statusSel.value = isManager ? 'تسليم' : 'استلام';
+  updateTimeFieldsByStatus();
+}
+
+function updateTimeFieldsByStatus() {
+  const status = document.getElementById('f-status').value;
+  const isTasleem = status === 'تسليم';
+  const now = new Date().toTimeString().slice(0,5);
+
+  const rtimeWrap = document.getElementById('f-rtime-wrap');
+  const rtimeInput = document.getElementById('f-rtime');
   const dtimeInput = document.getElementById('f-dtime');
-  if(isManager) {
+
+  if(isTasleem) {
+    // تسليم: إخفاء وقت الاستلام، تعيين وقت التسليم للوقت الحالي
+    rtimeWrap.style.display = 'none';
+    rtimeInput.value = '';
     dtimeInput.disabled = false;
     dtimeInput.style.background = '';
     dtimeInput.style.color = '';
     dtimeInput.style.borderColor = '';
+    dtimeInput.value = now;
   } else {
+    // استلام: إظهار وقت الاستلام، إخفاء وقت التسليم
+    rtimeWrap.style.display = '';
+    rtimeInput.value = now;
     dtimeInput.disabled = true;
     dtimeInput.value = '';
     dtimeInput.style.background = '#f0f0f0';
@@ -691,6 +775,7 @@ function fillEng() {
     dtimeInput.style.borderColor = '#ddd';
   }
 }
+
 function fillEditEng() {
   const name = document.getElementById('e-eng').value;
   const eng = ENGINEERS.find(e=>e.name===name)||{};
@@ -815,7 +900,6 @@ function saveRecord() {
   });
 
   saveToStorage();
-  autoSaveExcel();
   toast('⏳ جاري الحفظ في Google Sheets...');
   pushToCloud(rec, null).then(()=>{
     toast('✅ تم حفظ السجل '+rec.id+' في Google Sheets');
@@ -833,7 +917,7 @@ function resetForm() {
   document.getElementById('f-notes').value='';
   document.getElementById('f-dtime').value='';
   document.getElementById('f-rtime').value=new Date().toTimeString().slice(0,5);
-  document.getElementById('f-loc').value='المتجر أ';
+  document.getElementById('f-loc').value=LOCATIONS[0]||'المتجر أ';
   document.getElementById('f-status').value='استلام';
   document.getElementById('form-status-badge').textContent='جديد';
   // Reset device rows
@@ -850,11 +934,18 @@ function statusBadge(s) {
 
 // ── Render log ─────────────────────────────────────────────────
 function renderLog() {
+  // ensure devices is always array
+  RECORDS.forEach(r => {
+    if(typeof r.devices === 'string') {
+      try { r.devices = JSON.parse(r.devices||'[]'); } catch(e){ r.devices=[]; }
+    }
+    if(!Array.isArray(r.devices)) r.devices = [];
+  });
   const q = (document.getElementById('log-search').value||'').toLowerCase();
   const filtered = RECORDS.filter(r=>
     r.id.toLowerCase().includes(q) ||
     r.engineer.toLowerCase().includes(q) ||
-    r.devices.some(d=>d.id.toLowerCase().includes(q)||d.name.toLowerCase().includes(q))
+    r.devices.some(d=>d.id&&d.id.toLowerCase().includes(q)||d.name&&d.name.toLowerCase().includes(q))
   );
   const tbody = document.getElementById('log-tbody');
   if(!filtered.length){
@@ -895,7 +986,6 @@ function quickDelete(idx) {
   const _delId = RECORDS[idx].id;
   RECORDS.splice(idx,1);
   saveToStorage();
-  autoSaveExcel();
   pushToCloud(null, _delId);
   toast('🗑 تم حذف السجل');
   updateRecId(); renderLog();
@@ -954,7 +1044,6 @@ function saveEdit() {
 
   closeEdit();
   saveToStorage();
-  autoSaveExcel();
   const recToSend = {...r, devices: JSON.stringify(r.devices)};
   pushToCloud(recToSend, null);
   toast('✅ تم حفظ التعديلات على '+r.id);
@@ -1163,6 +1252,196 @@ function toast(msg) {
 document.getElementById('edit-modal').addEventListener('click',e=>{if(e.target===document.getElementById('edit-modal'))closeEdit();});
 document.getElementById('print-modal').addEventListener('click',e=>{if(e.target===document.getElementById('print-modal'))closePrint();});
 
+
+
+
+// ── Settings: Engineers ────────────────────────────────────────
+const LS_ENGINEERS = 'sf_engineers';
+const DEFAULT_ENGINEERS = [
+  {name:"محمود عبدالسميع سليمان عواد",nat:"مصري",iqama:"2543037325",empid:"260311",phone:""},
+  {name:"مجد جمال محمد حسين",nat:"مصري",iqama:"2559460999",empid:"260401",phone:""},
+  {name:"عبدالله محمد صالح ادم",nat:"سوداني",iqama:"2600459933",empid:"260402",phone:""},
+  {name:"افتخار علي خان ليق صابر",nat:"باكستاني",iqama:"2493737577",empid:"260403",phone:""},
+  {name:"فرقان ساغير ساغير احمد",nat:"باكستاني",iqama:"2551686542",empid:"260404",phone:""},
+  {name:"امجد خان قل محمود جان",nat:"باكستاني",iqama:"2524057474",empid:"260405",phone:""},
+  {name:"محمد سيف الإسلام",nat:"باكستاني",iqama:"2572124762",empid:"260406",phone:""},
+  {name:"مدير المخزن (صالح)",nat:"يمني",iqama:"",empid:"0",phone:""}
+];
+
+let engEditIdx = null;
+
+function loadEngineers() {
+  try {
+    const saved = localStorage.getItem(LS_ENGINEERS);
+    if(saved) ENGINEERS = JSON.parse(saved);
+    else ENGINEERS = [...DEFAULT_ENGINEERS];
+  } catch(e) { ENGINEERS = [...DEFAULT_ENGINEERS]; }
+}
+
+function saveEngineers() {
+  localStorage.setItem(LS_ENGINEERS, JSON.stringify(ENGINEERS));
+}
+
+function refreshEngDropdowns() {
+  ['f-eng','e-eng'].forEach(id => {
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— اختر المهندس —</option>';
+    ENGINEERS.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.name; opt.textContent = e.name;
+      sel.appendChild(opt);
+    });
+    if(current) sel.value = current;
+  });
+}
+
+function renderSettings() {
+  renderEngTable();
+  renderLocations();
+}
+
+function renderEngTable() {
+  const tbody = document.getElementById('eng-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = ENGINEERS.map((e,i) => `<tr>
+    <td style="font-weight:600">${e.name}</td>
+    <td>${e.empid||'—'}</td>
+    <td>${e.nat||'—'}</td>
+    <td style="font-size:12px;color:var(--muted)">${e.iqama||'—'}</td>
+    <td>${e.phone||'—'}</td>
+    <td class="no-print">
+      <div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn-edit" onclick="openEngModal(${i})">✏️ تعديل</button>
+        <button class="btn-del" onclick="deleteEng(${i})">🗑 حذف</button>
+      </div>
+    </td>
+  </tr>`).join('');
+}
+
+function openEngModal(idx) {
+  engEditIdx = (idx !== undefined) ? idx : null;
+  const title = document.getElementById('eng-modal-title');
+  if(engEditIdx !== null) {
+    const e = ENGINEERS[engEditIdx];
+    title.textContent = 'تعديل بيانات: ' + e.name;
+    document.getElementById('em-name').value = e.name;
+    document.getElementById('em-empid').value = e.empid||'';
+    document.getElementById('em-nat').value = e.nat||'';
+    document.getElementById('em-iqama').value = e.iqama||'';
+    document.getElementById('em-phone').value = e.phone||'';
+  } else {
+    title.textContent = 'إضافة مستلم جديد';
+    ['em-name','em-empid','em-nat','em-iqama','em-phone'].forEach(id=>document.getElementById(id).value='');
+  }
+  document.getElementById('eng-modal').classList.add('open');
+}
+
+function closeEngModal() {
+  document.getElementById('eng-modal').classList.remove('open');
+  engEditIdx = null;
+}
+
+function saveEng() {
+  const name = document.getElementById('em-name').value.trim();
+  if(!name){toast('الاسم مطلوب');return;}
+  const eng = {
+    name,
+    empid: document.getElementById('em-empid').value.trim(),
+    nat:   document.getElementById('em-nat').value.trim(),
+    iqama: document.getElementById('em-iqama').value.trim(),
+    phone: document.getElementById('em-phone').value.trim()
+  };
+  if(engEditIdx !== null) {
+    ENGINEERS[engEditIdx] = eng;
+    toast('تم تعديل بيانات ' + name);
+  } else {
+    if(ENGINEERS.find(e=>e.name===name)){toast('المستلم موجود مسبقاً');return;}
+    ENGINEERS.push(eng);
+    toast('تم إضافة المستلم ' + name);
+  }
+  saveEngineers();
+  refreshEngDropdowns();
+  closeEngModal();
+  renderEngTable();
+}
+
+function deleteEng(idx) {
+  const e = ENGINEERS[idx];
+  if(!confirm('حذف المستلم: ' + e.name + '؟')) return;
+  ENGINEERS.splice(idx,1);
+  saveEngineers();
+  refreshEngDropdowns();
+  renderEngTable();
+  toast('تم حذف المستلم ' + e.name);
+}
+
+// ── Settings: Locations ────────────────────────────────────────
+const LS_LOCATIONS = 'sf_locations';
+const DEFAULT_LOCATIONS = ['المستودع'];
+let LOCATIONS = [];
+
+function loadLocations() {
+  try {
+    const saved = localStorage.getItem(LS_LOCATIONS);
+    LOCATIONS = saved ? JSON.parse(saved) : [...DEFAULT_LOCATIONS];
+  } catch(e) { LOCATIONS = [...DEFAULT_LOCATIONS]; }
+}
+
+function saveLocations() {
+  localStorage.setItem(LS_LOCATIONS, JSON.stringify(LOCATIONS));
+}
+
+function refreshLocationSelects() {
+  ['f-loc','e-loc','dm-location'].forEach(id => {
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const current = sel.value;
+    sel.innerHTML = LOCATIONS.map(l=>`<option value="${l}">${l}</option>`).join('');
+    if(current && LOCATIONS.includes(current)) sel.value = current;
+  });
+}
+
+function renderLocations() {
+  const container = document.getElementById('locations-list');
+  if(!container) return;
+  container.innerHTML = LOCATIONS.map((l,i) => `
+    <div style="display:flex;align-items:center;gap:6px;background:var(--light);border:1.5px solid var(--border);border-radius:8px;padding:8px 14px">
+      <span style="font-weight:600;font-size:13px">${l}</span>
+      ${DEFAULT_LOCATIONS.includes(l)
+        ? '<span style="font-size:10px;color:var(--muted)">(افتراضي)</span>'
+        : `<button onclick="deleteLocation(${i})" style="background:none;border:none;cursor:pointer;color:var(--red-t);font-size:16px;padding:0 2px" title="حذف">✕</button>`}
+    </div>`).join('');
+}
+
+function addLocation() {
+  const input = document.getElementById('new-location-input');
+  const name = input.value.trim();
+  if(!name){toast('أدخل اسم الموقع');return;}
+  if(LOCATIONS.includes(name)){toast('الموقع موجود مسبقاً');return;}
+  LOCATIONS.push(name);
+  saveLocations();
+  refreshLocationSelects();
+  renderLocations();
+  input.value = '';
+  toast('تم إضافة الموقع: ' + name);
+}
+
+function deleteLocation(idx) {
+  const l = LOCATIONS[idx];
+  if(DEFAULT_LOCATIONS.includes(l)){toast('لا يمكن حذف المواقع الافتراضية');return;}
+  if(!confirm('حذف الموقع: ' + l + '؟')) return;
+  LOCATIONS.splice(idx,1);
+  saveLocations();
+  refreshLocationSelects();
+  renderLocations();
+  toast('تم حذف الموقع: ' + l);
+}
+
+document.addEventListener('click', function(e){
+  if(e.target===document.getElementById('eng-modal')) closeEngModal();
+});
 
 
 // ── Device Types Management ────────────────────────────────────
