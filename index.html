@@ -398,6 +398,11 @@ select{cursor:pointer}
 <!-- ═══════════ SETTINGS PAGE ═══════════ -->
 <div class="page" id="page-settings">
 
+  <!-- Export Settings -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+    <button class="btn btn-ghost no-print" onclick="exportExcelSettings()" style="font-size:13px;padding:8px 18px;color:var(--accent);border:1.5px solid var(--border)">📥 تصدير المستلمين والمواقع إلى Excel</button>
+  </div>
+
   <!-- Engineers Management -->
   <div class="card" style="margin-bottom:20px">
     <div class="card-header">👷 إدارة المستلمين</div>
@@ -546,7 +551,7 @@ select{cursor:pointer}
 
 <script>
 // ── Google Drive API Config ───────────────────────────────────
-const DEFAULT_API_URL_CONST = 'https://script.google.com/macros/s/AKfycbx3uY9gOcjoWPR_tGPR5OAuKu8CUYcOpQIyZprMnIK5kxcppdClCt5mqtgyUNc66bGE/exec';
+const DEFAULT_API_URL_CONST = 'https://script.google.com/macros/s/AKfycbwFiIoP_p5B47xTSIVpq5hGrt5cCIOXFc8SYxTJQd-JNt_IuUikSiPNyYVIkfVYk3kl/exec';
 let API_URL = localStorage.getItem('sf_api_url') || DEFAULT_API_URL_CONST;
 
 async function apiGet(params) {
@@ -587,6 +592,20 @@ async function syncFromCloud() {
       RECORDS = data.records.map(r => ({...r, devices: (() => { try { return typeof r.devices === 'string' ? JSON.parse(r.devices||'[]') : (r.devices||[]); } catch(e) { return []; } })()}));
     } else { RECORDS = []; }
     if(data.inventory && data.inventory.length) INVENTORY = data.inventory.map(d => ({...d}));
+    // دائماً حدّث المستلمين إذا وُجدوا في Sheets
+    if(data.engineers && Array.isArray(data.engineers) && data.engineers.length) {
+      ENGINEERS = data.engineers.map(e => ({...e}));
+      localStorage.setItem('sf_engineers', JSON.stringify(ENGINEERS));
+      refreshEngDropdowns();
+      renderEngTable();
+    }
+    // دائماً حدّث المواقع إذا وُجدت في Sheets
+    if(data.locations && Array.isArray(data.locations) && data.locations.length) {
+      LOCATIONS = data.locations.filter(l => l && l.trim());
+      localStorage.setItem('sf_locations', JSON.stringify(LOCATIONS));
+      refreshLocationSelects();
+      renderLocations();
+    }
     saveToStorage();
     showSyncBadge('✓ متزامن','#155724','#D4EDDA');
     return true;
@@ -618,6 +637,16 @@ async function pushToCloud(record, deletedId) {
     if(!invRes || invRes.error) {
       console.warn('Inventory sync issue:', invRes);
     }
+    // sync engineers
+    const engRes = await apiPost({action:'updateEngineers', engineers: ENGINEERS});
+    if(!engRes || engRes.error) {
+      console.warn('Engineers sync issue:', engRes);
+    }
+    // sync locations
+    const locRes = await apiPost({action:'updateLocations', locations: LOCATIONS});
+    if(!locRes || locRes.error) {
+      console.warn('Locations sync issue:', locRes);
+    }
     showSyncBadge('✓ محفوظ في Sheets','#155724','#D4EDDA');
   } catch(e) {
     showSyncBadge('فشل الاتصال','#721c24','#F8D7DA');
@@ -630,7 +659,7 @@ function showSyncBadge(text, color, bg) {
   if(b){ b.textContent=text; b.style.color=color; b.style.background=bg; }
 }
 
-const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbz-bkkJ_h_l1jwdqeN2iEdqRm6hlwLaWbE1EH3NfWIR6gFEmerUfsdHFQzjg5bzil2z/exec';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbwFiIoP_p5B47xTSIVpq5hGrt5cCIOXFc8SYxTJQd-JNt_IuUikSiPNyYVIkfVYk3kl/exec';
 function openApiSettings() {
   const url = prompt('أدخل رابط Google Apps Script (Web App URL):', API_URL);
   if(url===null) return;
@@ -1207,20 +1236,34 @@ function buildWorkbook() {
   const wb = XLSX.utils.book_new();
 
   // Log sheet
-  const logData = [["رقم السجل","التاريخ","المستلم","الرقم الوظيفي","الأجهزة","وقت الاستلام","وقت التسليم","الموقع","الحالة","ملاحظات"]];
+  const logData = [["رقم السجل","التاريخ","المستلم","الرقم الوظيفي","الجنسية","رقم التليفون","الأجهزة","وقت الاستلام","وقت التسليم","الموقع","الحالة","ملاحظات"]];
   RECORDS.forEach(r=>{
-    logData.push([r.id,r.date,r.engineer,r.empid,r.devices.map(d=>d.id).join('، '),r.rtime||'',r.dtime||'',r.location,r.status,r.notes||'']);
+    logData.push([r.id,r.date,r.engineer,r.empid||'',r.nat||'',r.phone||'',r.devices.map(d=>d.id).join('، '),r.rtime||'',r.dtime||'',r.location,r.status,r.notes||'']);
   });
   const ws1 = XLSX.utils.aoa_to_sheet(logData);
-  ws1['!cols'] = [{wch:12},{wch:14},{wch:28},{wch:12},{wch:22},{wch:12},{wch:12},{wch:16},{wch:12},{wch:24}];
+  ws1['!cols'] = [{wch:12},{wch:14},{wch:28},{wch:12},{wch:12},{wch:14},{wch:22},{wch:12},{wch:12},{wch:16},{wch:12},{wch:24}];
   XLSX.utils.book_append_sheet(wb,ws1,"سجل الاستلام");
 
   // Inventory sheet
-  const invData = [["رقم الجهاز","اسم الجهاز","النوع","الرقم التسلسلي","الحالة","المستلم الحالي","الموقع"]];
-  INVENTORY.forEach(d=>{invData.push([d.id,d.name,d.type,d.serial,d.status,d.holder,d.location]);});
+  const invData = [["رقم الجهاز","اسم الجهاز","النوع","الماركة / الموديل","الرقم التسلسلي","المواصفات","الحالة","المستلم الحالي","الموقع"]];
+  INVENTORY.forEach(d=>{invData.push([d.id,d.name,d.type,d.brand||'',d.serial,d.specs||'',d.status,d.holder,d.location]);});
   const ws2 = XLSX.utils.aoa_to_sheet(invData);
-  ws2['!cols'] = [{wch:12},{wch:22},{wch:12},{wch:16},{wch:12},{wch:28},{wch:14}];
+  ws2['!cols'] = [{wch:12},{wch:22},{wch:12},{wch:22},{wch:16},{wch:14},{wch:12},{wch:28},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws2,"المخزون");
+
+  // Engineers (Recipients) sheet
+  const engData = [["الاسم الكامل","الرقم الوظيفي","الجنسية","رقم الإقامة / الهوية","رقم التليفون"]];
+  ENGINEERS.forEach(e=>{engData.push([e.name,e.empid||'',e.nat||'',e.iqama||'',e.phone||'']);});
+  const ws3 = XLSX.utils.aoa_to_sheet(engData);
+  ws3['!cols'] = [{wch:32},{wch:14},{wch:14},{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws3,"إدارة المستلمين");
+
+  // Locations sheet
+  const locData = [["موقع العمل"]];
+  LOCATIONS.forEach(l=>{locData.push([l]);});
+  const ws4 = XLSX.utils.aoa_to_sheet(locData);
+  ws4['!cols'] = [{wch:28}];
+  XLSX.utils.book_append_sheet(wb,ws4,"مواقع العمل");
 
   return wb;
 }
@@ -1232,13 +1275,25 @@ function exportExcel() {
   toast('✅ تم تصدير ملف Excel');
 }
 
-// حفظ تلقائي في Excel عند كل سجل جديد أو تعديل
-function autoSaveExcel() {
-  if(!RECORDS.length) return;
-  try {
-    const wb = buildWorkbook();
-    XLSX.writeFile(wb,"متابعة_الأجهزة_"+new Date().toISOString().slice(0,10)+".xlsx");
-  } catch(e) { console.warn('Auto-save failed:', e); }
+function exportExcelSettings() {
+  const wb = XLSX.utils.book_new();
+
+  // Engineers sheet
+  const engData = [["الاسم الكامل","الرقم الوظيفي","الجنسية","رقم الإقامة / الهوية","رقم التليفون"]];
+  ENGINEERS.forEach(e=>{engData.push([e.name,e.empid||'',e.nat||'',e.iqama||'',e.phone||'']);});
+  const ws1 = XLSX.utils.aoa_to_sheet(engData);
+  ws1['!cols'] = [{wch:32},{wch:14},{wch:14},{wch:18},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws1,"إدارة المستلمين");
+
+  // Locations sheet
+  const locData = [["موقع العمل"]];
+  LOCATIONS.forEach(l=>{locData.push([l]);});
+  const ws2 = XLSX.utils.aoa_to_sheet(locData);
+  ws2['!cols'] = [{wch:28}];
+  XLSX.utils.book_append_sheet(wb,ws2,"مواقع العمل");
+
+  XLSX.writeFile(wb,"المستلمين_والمواقع_"+new Date().toISOString().slice(0,10)+".xlsx");
+  toast('✅ تم تصدير بيانات المستلمين والمواقع');
 }
 
 // ── Toast ──────────────────────────────────────────────────────
@@ -1365,6 +1420,7 @@ function saveEng() {
   refreshEngDropdowns();
   closeEngModal();
   renderEngTable();
+  pushToCloud(null, null);
 }
 
 function deleteEng(idx) {
@@ -1375,6 +1431,7 @@ function deleteEng(idx) {
   refreshEngDropdowns();
   renderEngTable();
   toast('تم حذف المستلم ' + e.name);
+  pushToCloud(null, null);
 }
 
 // ── Settings: Locations ────────────────────────────────────────
@@ -1426,6 +1483,7 @@ function addLocation() {
   renderLocations();
   input.value = '';
   toast('تم إضافة الموقع: ' + name);
+  pushToCloud(null, null);
 }
 
 function deleteLocation(idx) {
@@ -1437,6 +1495,7 @@ function deleteLocation(idx) {
   refreshLocationSelects();
   renderLocations();
   toast('تم حذف الموقع: ' + l);
+  pushToCloud(null, null);
 }
 
 document.addEventListener('click', function(e){
@@ -1446,7 +1505,7 @@ document.addEventListener('click', function(e){
 
 // ── Device Types Management ────────────────────────────────────
 const LS_TYPES = 'sf_device_types';
-const DEFAULT_TYPES = ['هاتف','تابلت','لابتوب','إكسسوار','أخرى'];
+const DEFAULT_TYPES = ['هاتف','تابلت','لابتوب','إكسسوار','أجهزة اختبارات','أخرى'];
 let DEVICE_TYPES = [];
 
 function loadDeviceTypes() {
