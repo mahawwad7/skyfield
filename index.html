@@ -137,9 +137,83 @@ select{cursor:pointer}
   body{background:#fff}
   .no-print{display:none!important}
 }
+
+/* ── Login Screen ─────────────────────────────────────────── */
+#login-screen{
+  position:fixed;inset:0;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+  display:flex;align-items:center;justify-content:center;z-index:9999;
+}
+#login-screen.hidden{display:none;}
+.login-box{
+  background:#fff;border-radius:20px;padding:48px 40px;width:100%;max-width:400px;
+  box-shadow:0 24px 60px rgba(0,0,0,0.4);text-align:center;
+}
+.login-logo{font-size:48px;margin-bottom:8px;}
+.login-title{font-size:22px;font-weight:700;color:#1a1a2e;margin-bottom:4px;}
+.login-sub{font-size:13px;color:#888;margin-bottom:32px;}
+.login-field{margin-bottom:16px;text-align:right;}
+.login-field label{display:block;font-size:13px;font-weight:600;color:#444;margin-bottom:6px;}
+.login-field input{
+  width:100%;padding:12px 16px;border:2px solid #e0e0e0;border-radius:10px;
+  font-size:15px;font-family:inherit;outline:none;transition:border .2s;direction:ltr;
+}
+.login-field input:focus{border-color:#0f3460;}
+.login-btn{
+  width:100%;padding:14px;background:linear-gradient(135deg,#0f3460,#e94560);
+  color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;
+  cursor:pointer;font-family:inherit;margin-top:8px;transition:opacity .2s;
+}
+.login-btn:hover{opacity:0.9;}
+.login-err{
+  color:#e94560;font-size:13px;margin-top:12px;min-height:20px;font-weight:600;
+}
+
+/* ── Searchable Dropdown ───────────────────────────────────── */
+.srch-wrap{position:relative;width:100%;}
+.srch-input{
+  width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:14px;font-family:inherit;outline:none;background:#fff;
+  transition:border .2s;
+}
+.srch-input:focus{border-color:var(--accent);}
+.srch-list{
+  position:absolute;top:calc(100% + 4px);right:0;left:0;
+  background:#fff;border:1.5px solid var(--accent);border-radius:8px;
+  max-height:220px;overflow-y:auto;z-index:500;
+  box-shadow:0 8px 24px rgba(0,0,0,0.12);display:none;
+}
+.srch-list.open{display:block;}
+.srch-item{
+  padding:10px 14px;cursor:pointer;font-size:13px;
+  border-bottom:1px solid #f0f0f0;transition:background .15s;
+}
+.srch-item:last-child{border-bottom:none;}
+.srch-item:hover,.srch-item.active{background:var(--light);color:var(--accent);font-weight:600;}
+.srch-item.unavail{color:#999;}
+.srch-empty{padding:12px 14px;color:#aaa;font-size:13px;text-align:center;}
 </style>
 </head>
 <body>
+<!-- ═══════════ LOGIN SCREEN ═══════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">📦</div>
+    <div class="login-title">نظام متابعة الأجهزة</div>
+    <div class="login-sub">Sky Field — تسجيل الدخول</div>
+    <div class="login-field">
+      <label>اسم المستخدم</label>
+      <input id="l-user" type="text" placeholder="username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-field">
+      <label>كلمة المرور</label>
+      <input id="l-pass" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">دخول</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+
 
 <div class="app-header no-print">
   <div style="display:flex;align-items:center;gap:12px">
@@ -184,9 +258,12 @@ select{cursor:pointer}
       <div class="fg">
         <div class="field">
           <label>اسم المستلم <span class="req">*</span></label>
-          <select id="f-eng" onchange="fillEng()">
-            <option value="">— اختر المهندس —</option>
-          </select>
+          <div class="srch-wrap" id="eng-srch-wrap">
+            <input class="srch-input" id="eng-srch-inp" placeholder="🔍 ابحث باسم المستلم..." autocomplete="off"
+              oninput="filterEngList()" onfocus="openEngList()" onblur="setTimeout(()=>closeEngList(),200)">
+            <input type="hidden" id="f-eng">
+            <div class="srch-list" id="eng-srch-list"></div>
+          </div>
         </div>
         <div class="field">
           <label>الرقم الوظيفي</label>
@@ -727,6 +804,7 @@ function loadFromStorage() {
 
 // ── Init ───────────────────────────────────────────────────────
 function init() {
+  checkLogin();
   loadEngineers();
   loadLocations();
   loadFromStorage();
@@ -764,7 +842,7 @@ function goTab(t) {
 
 // ── Engineer auto-fill ─────────────────────────────────────────
 function fillEng() {
-  const name = document.getElementById('f-eng').value;
+  const name = document.getElementById('f-eng').value || document.getElementById('eng-srch-inp').value;
   const eng = ENGINEERS.find(e=>e.name===name)||{};
   document.getElementById('f-empid').value = eng.empid||'';
   document.getElementById('f-nat').value = eng.nat||'';
@@ -833,10 +911,12 @@ function addDeviceRow() {
   tr.innerHTML = `
     <td><div class="row-num">${deviceRowCount}</div></td>
     <td>
-      <select onchange="fillDeviceRow(${deviceRowCount})" id="dev-sel-${deviceRowCount}" style="min-width:140px">
-        <option value="">— اختر —</option>
-        ${INVENTORY.map(d=>`<option value="${d.id}">${d.id} | ${d.name}</option>`).join('')}
-      </select>
+      <div class="srch-wrap">
+        <input class="srch-input" id="dev-inp-${deviceRowCount}" placeholder="🔍 ابحث عن جهاز..." autocomplete="off"
+          oninput="filterDevList(${deviceRowCount})" onfocus="openDevList(${deviceRowCount})" onblur="setTimeout(()=>closeDevList(${deviceRowCount}),200)" style="min-width:160px">
+        <input type="hidden" id="dev-sel-${deviceRowCount}">
+        <div class="srch-list" id="dev-list-${deviceRowCount}"></div>
+      </div>
     </td>
     <td><div class="auto-td" id="dev-name-${deviceRowCount}">—</div></td>
     <td><div class="auto-td" id="dev-type-${deviceRowCount}">—</div></td>
@@ -1338,18 +1418,18 @@ function saveEngineers() {
 }
 
 function refreshEngDropdowns() {
-  ['f-eng','e-eng'].forEach(id => {
-    const sel = document.getElementById(id);
-    if(!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">— اختر المهندس —</option>';
+  // edit modal still uses regular select
+  const eSel = document.getElementById('e-eng');
+  if(eSel) {
+    const current = eSel.value;
+    eSel.innerHTML = '<option value="">— اختر المهندس —</option>';
     ENGINEERS.forEach(e => {
       const opt = document.createElement('option');
       opt.value = e.name; opt.textContent = e.name;
-      sel.appendChild(opt);
+      eSel.appendChild(opt);
     });
-    if(current) sel.value = current;
-  });
+    if(current) eSel.value = current;
+  }
 }
 
 function renderSettings() {
@@ -1503,6 +1583,38 @@ document.addEventListener('click', function(e){
 });
 
 
+
+// ── Login ──────────────────────────────────────────────────────
+const USERS = [
+  {username:'saleh3456', password:'2546745338'},
+  {username:'Mawwad',    password:'2543037325'}
+];
+
+function doLogin() {
+  const u = document.getElementById('l-user').value.trim();
+  const p = document.getElementById('l-pass').value.trim();
+  const found = USERS.find(x => x.username === u && x.password === p);
+  if(found) {
+    sessionStorage.setItem('sf_logged', '1');
+    sessionStorage.setItem('sf_user', u);
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('login-err').textContent = '';
+  } else {
+    document.getElementById('login-err').textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
+    document.getElementById('l-pass').value = '';
+    document.getElementById('l-pass').focus();
+  }
+}
+
+function checkLogin() {
+  if(sessionStorage.getItem('sf_logged') !== '1') {
+    document.getElementById('login-screen').classList.remove('hidden');
+    setTimeout(()=>document.getElementById('l-user').focus(), 100);
+  } else {
+    document.getElementById('login-screen').classList.add('hidden');
+  }
+}
+
 // ── Device Types Management ────────────────────────────────────
 const LS_TYPES = 'sf_device_types';
 const DEFAULT_TYPES = ['هاتف','تابلت','لابتوب','إكسسوار','أجهزة اختبارات','أخرى'];
@@ -1559,6 +1671,83 @@ function openTypeManager() {
   saveDeviceTypes();
   renderTypeSelect(DEVICE_TYPES[0]);
   toast('🗑 تم حذف النوع: ' + removed);
+}
+
+
+// ── Searchable Engineer Dropdown ───────────────────────────────
+function openEngList() {
+  renderEngList('');
+  document.getElementById('eng-srch-list').classList.add('open');
+}
+function closeEngList() {
+  document.getElementById('eng-srch-list').classList.remove('open');
+}
+function filterEngList() {
+  const q = document.getElementById('eng-srch-inp').value;
+  renderEngList(q);
+  document.getElementById('eng-srch-list').classList.add('open');
+}
+function renderEngList(q) {
+  const list = document.getElementById('eng-srch-list');
+  const filtered = ENGINEERS.filter(e => e.name.toLowerCase().includes(q.toLowerCase()));
+  if(!filtered.length) {
+    list.innerHTML = '<div class="srch-empty">لا توجد نتائج</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(e =>
+    `<div class="srch-item" onmousedown="selectEng('${e.name.replace(/'/g,"\\'")}')">
+      <span style="font-weight:600">${e.name}</span>
+      <span style="font-size:11px;color:#999;margin-right:8px">${e.empid}</span>
+    </div>`
+  ).join('');
+}
+function selectEng(name) {
+  document.getElementById('eng-srch-inp').value = name;
+  document.getElementById('f-eng').value = name;
+  closeEngList();
+  fillEng();
+}
+
+// ── Searchable Device Dropdown ─────────────────────────────────
+function openDevList(n) {
+  renderDevList(n, '');
+  document.getElementById('dev-list-'+n).classList.add('open');
+}
+function closeDevList(n) {
+  const el = document.getElementById('dev-list-'+n);
+  if(el) el.classList.remove('open');
+}
+function filterDevList(n) {
+  const q = document.getElementById('dev-inp-'+n).value;
+  renderDevList(n, q);
+  document.getElementById('dev-list-'+n).classList.add('open');
+}
+function renderDevList(n, q) {
+  const list = document.getElementById('dev-list-'+n);
+  if(!list) return;
+  const filtered = INVENTORY.filter(d =>
+    d.id.toLowerCase().includes(q.toLowerCase()) ||
+    d.name.toLowerCase().includes(q.toLowerCase())
+  );
+  if(!filtered.length) {
+    list.innerHTML = '<div class="srch-empty">لا توجد أجهزة</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(d =>
+    `<div class="srch-item ${d.status!=='متاح'?'unavail':''}" onmousedown="selectDev(${n},'${d.id.replace(/'/g,"\\'")}')">
+      <span style="font-weight:600">${d.id}</span>
+      <span style="margin-right:6px;color:#555">${d.name}</span>
+      <span style="font-size:11px;color:${d.status==='متاح'?'#155724':'#999'}">${d.status}</span>
+    </div>`
+  ).join('');
+}
+function selectDev(n, id) {
+  const dev = INVENTORY.find(d=>d.id===id);
+  if(!dev) return;
+  document.getElementById('dev-inp-'+n).value = dev.id + ' | ' + dev.name;
+  document.getElementById('dev-sel-'+n).value = id;
+  closeDevList(n);
+  fillDeviceRow(n);
 }
 
 // ── Device Management ──────────────────────────────────────────
